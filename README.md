@@ -12,29 +12,29 @@ A comprehensive system for fine-tuning AI models on Islamic knowledge from the Q
 ## 🚀 Quick Start
 
 1. **Setup Environment**:
-   \`\`\`bash
+   ```bash
    chmod +x setup.sh
    ./setup.sh
-   \`\`\`
+   ```
 
 2. **Set API Key**:
-   \`\`\`bash
+   ```bash
    export OPENAI_API_KEY='your-openai-api-key'
-   \`\`\`
+   ```
 
 3. **Prepare Data**:
-   \`\`\`bash
-   python main.py
-   \`\`\`
+   ```bash
+   python3 main.py
+   ```
 
 4. **Start Training**:
-   \`\`\`bash
-   python trainer_main.py
-   \`\`\`
+   ```bash
+   python3 trainer_main.py
+   ```
 
 ## 📁 Project Structure
 
-\`\`\`
+```
 islamic-ai-finetuning/
 ├── data_manager.py      # Data management system
 ├── islamic_aitrainer.py # Fine-tuning operations
@@ -46,7 +46,7 @@ islamic-ai-finetuning/
 ├── data/              # Training data
 ├── logs/              # Training logs
 └── models/            # Model information
-\`\`\`
+```
 
 ## 🔧 Usage
 
@@ -65,7 +65,7 @@ islamic-ai-finetuning/
 ## 📊 Data Format
 
 Training examples follow OpenAI's chat format:
-\`\`\`json
+```json
 {
   "messages": [
     {"role": "system", "content": "Islamic scholar assistant..."},
@@ -73,7 +73,7 @@ Training examples follow OpenAI's chat format:
     {"role": "assistant", "content": "The five pillars are... **Reference:** Sahih al-Bukhari 8"}
   ]
 }
-\`\`\`
+```
 
 ## 🤝 Contributing
 
@@ -83,7 +83,7 @@ Training examples follow OpenAI's chat format:
 
 ## 📜 License
 
-This project is intended for educational and religious purposes. Please use responsibly and ensure all Islamic content is accurate and properly attributed.
+This project is intended for educational and religious purposes. Please use responsibly and ensure all Islamic content is accurate and properly attributed. Help me with the data with valid references, or ask me to update. Thanks
 
 ---
 
