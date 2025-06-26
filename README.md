@@ -2,6 +2,8 @@
 
 A comprehensive system for fine-tuning AI models on Islamic knowledge from the Quran and authentic Hadiths.
 
+Project overview: [A detailed overview of the project highlighting the goals and purpose of it.](./INFO.md)
+
 ## 🎯 Features
 
 - **Data Management**: Create, organize, and validate training data
