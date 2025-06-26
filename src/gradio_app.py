@@ -13,6 +13,9 @@ from islamic_aitrainer import IslamicAITrainer
 from web_scraper import WebScraper
 from utils import print_success, print_error, print_info, print_warning
 import pandas as pd
+import PyPDF2
+import pdfplumber
+from openai import OpenAI
 
 class GradioApp:
     def __init__(self):
@@ -25,6 +28,7 @@ class GradioApp:
         if os.getenv("OPENAI_API_KEY"):
             try:
                 self.trainer = IslamicAITrainer()
+                self.openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
             except Exception as e:
                 print_warning(f"⚠️ Could not initialize trainer: {e}")
         
@@ -32,11 +36,198 @@ class GradioApp:
         self.scraped_dir = self.project_root / "scraped_content"
         self.scraped_dir.mkdir(exist_ok=True)
 
+    def extract_pdf_text(self, pdf_path):
+        """Extract text from PDF file using multiple methods"""
+        text_content = ""
+        
+        try:
+            # Method 1: Try pdfplumber first (better for complex PDFs)
+            with pdfplumber.open(pdf_path) as pdf:
+                for page in pdf.pages:
+                    page_text = page.extract_text()
+                    if page_text:
+                        text_content += page_text + "\n\n"
+            
+            if text_content.strip():
+                return text_content
+                
+        except Exception as e:
+            print_warning(f"⚠️ pdfplumber failed: {e}")
+        
+        try:
+            # Method 2: Fallback to PyPDF2
+            with open(pdf_path, 'rb') as file:
+                pdf_reader = PyPDF2.PdfReader(file)
+                for page in pdf_reader.pages:
+                    page_text = page.extract_text()
+                    if page_text:
+                        text_content += page_text + "\n\n"
+                        
+        except Exception as e:
+            print_warning(f"⚠️ PyPDF2 failed: {e}")
+            return None
+        
+        return text_content if text_content.strip() else None
+
+    def process_text_with_ai(self, text_content, islamic_sources_required=False):
+        """Process text content using OpenAI to extract Q&A pairs"""
+        if not self.openai_client:
+            return {
+                'success': False,
+                'message': 'OpenAI client not available. Please set OPENAI_API_KEY.',
+                'qa_pairs': []
+            }
+        
+        try:
+            # Split text into chunks if too long
+            max_chunk_size = 8000  # Leave room for prompt
+            text_chunks = []
+            
+            if len(text_content) > max_chunk_size:
+                words = text_content.split()
+                current_chunk = []
+                current_size = 0
+                
+                for word in words:
+                    if current_size + len(word) > max_chunk_size:
+                        text_chunks.append(' '.join(current_chunk))
+                        current_chunk = [word]
+                        current_size = len(word)
+                    else:
+                        current_chunk.append(word)
+                        current_size += len(word) + 1
+                
+                if current_chunk:
+                    text_chunks.append(' '.join(current_chunk))
+            else:
+                text_chunks = [text_content]
+            
+            all_qa_pairs = []
+            
+            for i, chunk in enumerate(text_chunks):
+                print_info(f"🤖 Processing chunk {i+1}/{len(text_chunks)} with AI...")
+                
+                if islamic_sources_required:
+                    system_prompt = """You are an Islamic scholar assistant. Extract question-answer pairs from the provided text that are related to Islamic knowledge (Quran, Hadith, Islamic practices, etc.).
+
+For each Q&A pair, you MUST provide:
+1. A clear question
+2. A comprehensive answer
+3. The Islamic source (Quran, Sahih al-Bukhari, Sahih Muslim, etc.)
+4. The specific reference (verse number, hadith number, etc.)
+5. A category (e.g., Prayer, Charity, Character, etc.)
+
+Only extract content that has proper Islamic sources and references. If no Islamic Q&A pairs can be found, return an empty array.
+
+Return the result as a JSON array in this exact format:
+[
+  {
+    "question": "What are the five pillars of Islam?",
+    "answer": "The five pillars of Islam are...",
+    "source": "Sahih al-Bukhari",
+    "reference": "8",
+    "category": "Pillars of Islam"
+  }
+]"""
+                else:
+                    system_prompt = """Extract question-answer pairs from the provided text. Create educational Q&A pairs that would be useful for training.
+
+For each Q&A pair, provide:
+1. A clear question
+2. A comprehensive answer
+3. A source (can be the document title, website, or "General Knowledge")
+4. A reference (page number, section, or "N/A")
+5. A category
+
+Return the result as a JSON array in this exact format:
+[
+  {
+    "question": "What is the main topic discussed?",
+    "answer": "The main topic is...",
+    "source": "Document Title or General Knowledge",
+    "reference": "Page 1 or N/A",
+    "category": "General"
+  }
+]"""
+                
+                try:
+                    response = self.openai_client.chat.completions.create(
+                        model="gpt-4o-mini",
+                        messages=[
+                            {"role": "system", "content": system_prompt},
+                            {"role": "user", "content": f"Extract Q&A pairs from this text:\n\n{chunk}"}
+                        ],
+                        max_tokens=2000,
+                        temperature=0.3
+                    )
+                    
+                    ai_response = response.choices[0].message.content.strip()
+                    
+                    # Try to parse JSON response
+                    try:
+                        # Clean the response to extract JSON
+                        if '```json' in ai_response:
+                            ai_response = ai_response.split('```json')[1].split('```')[0]
+                        elif '```' in ai_response:
+                            ai_response = ai_response.split('```')[1]
+                        
+                        qa_pairs = json.loads(ai_response)
+                        
+                        if isinstance(qa_pairs, list):
+                            all_qa_pairs.extend(qa_pairs)
+                        
+                    except json.JSONDecodeError:
+                        print_warning(f"⚠️ Could not parse AI response as JSON for chunk {i+1}")
+                        continue
+                
+                except Exception as e:
+                    print_warning(f"⚠️ AI processing failed for chunk {i+1}: {e}")
+                    continue
+                
+                # Add delay between API calls
+                time.sleep(1)
+            
+            return {
+                'success': True,
+                'message': f'Successfully extracted {len(all_qa_pairs)} Q&A pairs',
+                'qa_pairs': all_qa_pairs
+            }
+            
+        except Exception as e:
+            return {
+                'success': False,
+                'message': f'AI processing failed: {str(e)}',
+                'qa_pairs': []
+            }
+
+    def upload_file(self, file, islamic_sources_toggle):
+        """Process uploaded file (JSON, TXT, or PDF)"""
+        if file is None:
+            return "❌ No file uploaded", "", ""
+        
+        try:
+            file_path = Path(file.name)
+            file_extension = file_path.suffix.lower()
+            
+            print_info(f"📁 Processing {file_extension} file: {file_path.name}")
+            
+            if file_extension == '.json':
+                return self.upload_json_file(file)
+            
+            elif file_extension == '.txt':
+                return self.upload_txt_file(file, islamic_sources_toggle)
+            
+            elif file_extension == '.pdf':
+                return self.upload_pdf_file(file, islamic_sources_toggle)
+            
+            else:
+                return f"❌ Unsupported file type: {file_extension}", "", ""
+                
+        except Exception as e:
+            return f"❌ Error processing file: {str(e)}", "", ""
+
     def upload_json_file(self, file):
         """Process uploaded JSON file for training data"""
-        if file is None:
-            return "❌ No file uploaded", ""
-        
         try:
             with open(file.name, 'r', encoding='utf-8') as f:
                 data = json.load(f)
@@ -58,67 +249,135 @@ class GradioApp:
             if added_count > 0:
                 self.data_manager._save_training_data()
                 stats = self.get_data_statistics()
-                return f"✅ Successfully added {added_count} training examples from JSON file", stats
+                return f"✅ Successfully added {added_count} training examples from JSON file", stats, ""
             else:
-                return "⚠️ No valid training examples found in JSON file", ""
+                return "⚠️ No valid training examples found in JSON file", "", ""
                 
         except Exception as e:
-            return f"❌ Error processing JSON file: {str(e)}", ""
+            return f"❌ Error processing JSON file: {str(e)}", "", ""
 
-    def upload_txt_file(self, file):
-        """Process uploaded TXT file for training data"""
-        if file is None:
-            return "❌ No file uploaded", ""
-        
+    def upload_txt_file(self, file, islamic_sources_required):
+        """Process uploaded TXT file with AI formatting"""
         try:
             with open(file.name, 'r', encoding='utf-8') as f:
                 content = f.read()
             
-            # Save the content to scraped directory for manual processing
+            # Save original content
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             output_file = self.scraped_dir / f"uploaded_text_{timestamp}.txt"
             
             with open(output_file, 'w', encoding='utf-8') as f:
                 f.write(content)
             
-            # Provide instructions for manual processing
-            instructions = f"""
-📄 Text file uploaded successfully!
-📁 Saved to: {output_file}
-
-📝 Next Steps:
-1. Review the content in the saved file
-2. Extract Q&A pairs manually or use the content as reference material
-3. Use the 'Manual Data Entry' section below to add structured training examples
-4. Or format the content as JSON and re-upload using the JSON upload option
-
-💡 Tip: For best results, structure your data as question-answer pairs with proper Islamic references.
-            """
+            # Show preview
+            preview = content[:1000] + "..." if len(content) > 1000 else content
             
-            return instructions, self.get_data_statistics()
+            return (
+                f"✅ Text file uploaded successfully!\n📁 Saved to: {output_file.name}\n📊 Content length: {len(content):,} characters",
+                self.get_data_statistics(),
+                preview
+            )
             
         except Exception as e:
-            return f"❌ Error processing TXT file: {str(e)}", ""
+            return f"❌ Error processing TXT file: {str(e)}", "", ""
 
-    def scrape_website(self, url, max_pages=1):
+    def upload_pdf_file(self, file, islamic_sources_required):
+        """Process uploaded PDF file with AI formatting"""
+        try:
+            # Extract text from PDF
+            pdf_text = self.extract_pdf_text(file.name)
+            
+            if not pdf_text:
+                return "❌ Could not extract text from PDF file", "", ""
+            
+            # Save extracted content
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            output_file = self.scraped_dir / f"uploaded_pdf_{timestamp}.txt"
+            
+            with open(output_file, 'w', encoding='utf-8') as f:
+                f.write(f"Extracted from PDF: {Path(file.name).name}\n")
+                f.write(f"Extraction date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+                f.write("="*80 + "\n\n")
+                f.write(pdf_text)
+            
+            # Show preview
+            preview = pdf_text[:1000] + "..." if len(pdf_text) > 1000 else pdf_text
+            
+            return (
+                f"✅ PDF file processed successfully!\n📁 Saved to: {output_file.name}\n📊 Extracted text length: {len(pdf_text):,} characters",
+                self.get_data_statistics(),
+                preview
+            )
+            
+        except Exception as e:
+            return f"❌ Error processing PDF file: {str(e)}", "", ""
+
+    def process_uploaded_content_with_ai(self, islamic_sources_required):
+        """Process the most recent uploaded content with AI"""
+        try:
+            # Get the most recent uploaded file
+            uploaded_files = list(self.scraped_dir.glob("uploaded_*"))
+            if not uploaded_files:
+                return "❌ No uploaded content found to process", ""
+            
+            # Get the most recent file
+            latest_file = max(uploaded_files, key=lambda x: x.stat().st_mtime)
+            
+            with open(latest_file, 'r', encoding='utf-8') as f:
+                content = f.read()
+            
+            print_info(f"🤖 Processing {latest_file.name} with AI...")
+            
+            # Process with AI
+            result = self.process_text_with_ai(content, islamic_sources_required)
+            
+            if result['success'] and result['qa_pairs']:
+                # Add to training data
+                added_count = 0
+                for qa_pair in result['qa_pairs']:
+                    if all(key in qa_pair for key in ['question', 'answer', 'source', 'reference']):
+                        example = self.data_manager.create_training_example(
+                            qa_pair['question'],
+                            qa_pair['answer'],
+                            qa_pair['source'],
+                            qa_pair['reference'],
+                            qa_pair.get('category', 'General')
+                        )
+                        self.data_manager.training_data.append(example)
+                        added_count += 1
+                
+                if added_count > 0:
+                    self.data_manager._save_training_data()
+                    stats = self.get_data_statistics()
+                    return f"✅ AI processed content successfully!\n📊 Added {added_count} training examples\n🤖 Processed file: {latest_file.name}", stats
+                else:
+                    return "⚠️ AI processed content but no valid Q&A pairs were extracted", ""
+            else:
+                return f"❌ AI processing failed: {result['message']}", ""
+                
+        except Exception as e:
+            return f"❌ Error processing content with AI: {str(e)}", ""
+
+    def scrape_website(self, url, max_pages, islamic_only):
         """Scrape website content and save to file"""
         if not url:
-            return "❌ Please enter a valid URL", ""
+            return "❌ Please enter a valid URL", "", ""
         
         try:
             # Clean and validate URL
             if not url.startswith(('http://', 'https://')):
                 url = 'https://' + url
             
-            result = self.web_scraper.scrape_url(url, max_pages)
+            result = self.web_scraper.scrape_url(url, max_pages, islamic_only)
             
             if result['success']:
-                return result['message'], result['content'][:1000] + "..." if len(result['content']) > 1000 else result['content']
+                preview = result['content'][:1000] + "..." if len(result['content']) > 1000 else result['content']
+                return result['message'], self.get_data_statistics(), preview
             else:
-                return f"❌ Scraping failed: {result['message']}", ""
+                return f"❌ Scraping failed: {result['message']}", "", ""
                 
         except Exception as e:
-            return f"❌ Error scraping website: {str(e)}", ""
+            return f"❌ Error scraping website: {str(e)}", "", ""
 
     def add_manual_example(self, question, answer, source, reference, category):
         """Add a manual training example"""
@@ -340,48 +599,62 @@ def create_gradio_interface():
         with gr.Tabs():
             # Data Management Tab
             with gr.TabItem("📊 Data Management"):
-                gr.Markdown("### Upload Training Data")
+                gr.Markdown("### Upload Training Files")
                 
                 with gr.Row():
                     with gr.Column():
-                        gr.Markdown("#### 📄 Upload JSON File")
-                        json_file = gr.File(
-                            label="Upload JSON training data",
-                            file_types=[".json"],
+                        gr.Markdown("#### 📁 Upload Files (JSON, TXT, PDF)")
+                        
+                        # Islamic sources toggle
+                        islamic_toggle = gr.Checkbox(
+                            label="🕌 Islamic Content Only (requires proper sources)",
+                            value=False,
+                            info="When enabled, only Islamic content with proper Quran/Hadith sources will be processed"
+                        )
+                        
+                        # File upload
+                        file_upload = gr.File(
+                            label="Upload training file",
+                            file_types=[".json", ".txt", ".pdf"],
                             type="filepath"
                         )
-                        json_upload_btn = gr.Button("Process JSON File", variant="primary")
-                        json_output = gr.Textbox(label="JSON Upload Status", lines=3)
+                        
+                        upload_btn = gr.Button("📤 Process File", variant="primary")
+                        upload_output = gr.Textbox(label="Upload Status", lines=4)
+                        
+                        # Content preview
+                        content_preview = gr.Textbox(
+                            label="📖 Content Preview", 
+                            lines=6,
+                            placeholder="File content preview will appear here..."
+                        )
+                        
+                        # AI Processing button for uploaded content
+                        process_ai_btn = gr.Button("🤖 Process with AI", variant="secondary")
                     
                     with gr.Column():
-                        gr.Markdown("#### 📝 Upload Text File")
-                        txt_file = gr.File(
-                            label="Upload text content",
-                            file_types=[".txt"],
-                            type="filepath"
-                        )
-                        txt_upload_btn = gr.Button("Process Text File", variant="primary")
-                        txt_output = gr.Textbox(label="Text Upload Status", lines=3)
-                
-                gr.Markdown("### 🌐 Web Scraping")
-                with gr.Row():
-                    with gr.Column():
+                        gr.Markdown("#### 🌐 Web Scraping")
                         url_input = gr.Textbox(
                             label="Website URL",
                             placeholder="https://example.com",
                             lines=1
                         )
-                        max_pages = gr.Number(
-                            label="Max Pages to Scrape",
-                            value=1,
-                            minimum=1,
-                            maximum=10
-                        )
-                        scrape_btn = gr.Button("Scrape Website", variant="primary")
-                    
-                    with gr.Column():
-                        scrape_output = gr.Textbox(label="Scraping Status", lines=3)
-                        scraped_content = gr.Textbox(label="Scraped Content Preview", lines=5)
+                        
+                        with gr.Row():
+                            max_pages = gr.Number(
+                                label="Max Pages",
+                                value=1,
+                                minimum=1,
+                                maximum=10
+                            )
+                            islamic_scrape_toggle = gr.Checkbox(
+                                label="🕌 Islamic Content Only",
+                                value=False
+                            )
+                        
+                        scrape_btn = gr.Button("🌐 Scrape Website", variant="primary")
+                        scrape_output = gr.Textbox(label="Scraping Status", lines=4)
+                        scraped_preview = gr.Textbox(label="📖 Scraped Preview", lines=6)
                 
                 gr.Markdown("### ✏️ Manual Data Entry")
                 with gr.Row():
@@ -479,22 +752,22 @@ def create_gradio_interface():
                         test_output = gr.Markdown(label="Model Response")
         
         # Event handlers
-        json_upload_btn.click(
-            app.upload_json_file,
-            inputs=[json_file],
-            outputs=[json_output, stats_display]
+        upload_btn.click(
+            app.upload_file,
+            inputs=[file_upload, islamic_toggle],
+            outputs=[upload_output, stats_display, content_preview]
         )
         
-        txt_upload_btn.click(
-            app.upload_txt_file,
-            inputs=[txt_file],
-            outputs=[txt_output, stats_display]
+        process_ai_btn.click(
+            app.process_uploaded_content_with_ai,
+            inputs=[islamic_toggle],
+            outputs=[upload_output, stats_display]
         )
         
         scrape_btn.click(
             app.scrape_website,
-            inputs=[url_input, max_pages],
-            outputs=[scrape_output, scraped_content]
+            inputs=[url_input, max_pages, islamic_scrape_toggle],
+            outputs=[scrape_output, stats_display, scraped_preview]
         )
         
         add_example_btn.click(
