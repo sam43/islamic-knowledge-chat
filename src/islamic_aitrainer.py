@@ -15,7 +15,15 @@ from tabulate import tabulate
 class IslamicAITrainer:
     def __init__(self):
         """Initialize the trainer with OpenAI client"""
-        self.client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        api_key = os.getenv("OPENAI_API_KEY")
+        
+        # Add validation - Add these lines
+        if not api_key:
+            print_error("❌ OPENAI_API_KEY not found in environment variables")
+            print_info("💡 Make sure your .env file contains: OPENAI_API_KEY=your_key_here")
+            raise ValueError("Missing OPENAI_API_KEY")
+        
+        self.client = OpenAI(api_key=api_key)
         self.base_model = "gpt-4o-mini-2024-07-18"
         self.suffix = "quran-hadiths"
         self.project_root = Path(__file__).parent
