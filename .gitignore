@@ -1,2 +1,10 @@
 # ilm-ai-finetuning .gitignore
-/config/.env
+# Ignore config/.env files before pushing to GitHub.
+# This is a good practice for security reasons and use your own api key for training.
+.env
+ilm-ai-env/
+*.pyc
+__pycache__/
+*.egg-info/
+dist/
+build/
