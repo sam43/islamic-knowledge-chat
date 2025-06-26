@@ -1,5 +1,6 @@
 """
-Main script to run the Islamic AI Trainer
+Main script to run the Islamic AI Trainer CLI version of the app.
+This version includes additional features and functionality compared to the original.
 """
 
 from islamic_aitrainer import IslamicAITrainer

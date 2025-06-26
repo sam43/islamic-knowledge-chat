@@ -1,92 +1,171 @@
-# 🕌 Islamic AI Fine-tuning Project
+# 🕌 Noor AI: Islamic knowledge-based AI Model Fine-tuning Project
 
 A comprehensive system for fine-tuning AI models on Islamic knowledge from the Quran and authentic Hadiths.
 
 Project overview: [A detailed overview of the project highlighting the goals and purpose of it.](./INFO.md)
 
-## 🎯 Features
-
-- **Data Management**: Create, organize, and validate training data
-- **Fine-tuning**: Train models using OpenAI's API
-- **Testing**: Evaluate model performance with Islamic Q&A
-- **Monitoring**: Track training jobs and model status
+A user-friendly web interface for training AI models on Islamic knowledge. (Backend focued only)
 
 ## 🚀 Quick Start
 
-1. **Setup Environment**:
-   ```bash
-   chmod +x setup.sh
-   ./setup.sh
-   ```
-
-2. **Set API Key**:
-   ```bash
-   export OPENAI_API_KEY='your-openai-api-key'
-   ```
-
-3. **Prepare Data**:
-   ```bash
-   python3 main.py
-   ```
-
-4. **Start Training**:
-   ```bash
-   python3 trainer_main.py
-   ```
-
-## 📁 Project Structure
-
-```
-islamic-ai-finetuning/
-├── data_manager.py      # Data management system
-├── islamic_aitrainer.py # Fine-tuning operations
-├── utils.py            # Utility functions
-├── main.py             # Data manager interface
-├── trainer_main.py     # Training interface
-├── requirements.txt    # Dependencies
-├── setup.sh           # Setup script
-├── data/              # Training data
-├── logs/              # Training logs
-└── models/            # Model information
+### Option 1: Using the launch script
+```bash
+chmod +x run_gradio.sh
+./run_gradio.sh
 ```
 
-## 🔧 Usage
+### Option 2: Manual setup
+```bash
+# Install requirements
+pip3 install -r requirements.txt
 
-### Data Management
-- Generate sample Islamic Q&A data
-- Manual data entry with validation
-- Import from CSV/JSON templates
-- Export and backup capabilities
+# Set OpenAI API key (optional for data management)
+export OPENAI_API_KEY='your-openai-api-key'
 
-### Fine-tuning
-- Upload data to OpenAI
-- Start fine-tuning jobs
+# Launch interface
+python3 launch_gradio.py
+```
+
+## 🎯 Features
+
+### 📊 Data Management
+- **File Upload**: Upload JSON and TXT files for training data
+- **Web Scraping**: Extract content from websites automatically
+- **Manual Entry**: Add training examples through web forms
+- **Sample Generation**: Create sample Islamic Q&A data
+
+### 📈 Data Statistics
+- **Real-time Stats**: View training data statistics
+- **Data Validation**: Check format compatibility
+- **Train/Validation Split**: Prepare data for training
+- **Export Options**: Download data as CSV
+
+### 🚀 Model Training
+- **One-click Training**: Start fine-tuning with OpenAI
+- **Progress Monitoring**: Check training job status
+- **Model Management**: List and organize trained models
+
+### 🧪 Model Testing
+- **Interactive Testing**: Test models with custom questions
+- **Islamic Knowledge**: Specialized for Quran and Hadith
+- **Response Evaluation**: Review model performance
+
+## 📱 Interface Sections
+
+### 1. Data Management Tab
+- Upload JSON/TXT files
+- Scrape websites for content
+- Add manual training examples
+- Generate sample data
+
+### 2. Data Statistics Tab
+- View current data overview
+- Split data for training/validation
+- Validate data format
+- Export data to CSV
+
+### 3. Model Training Tab
+- Start fine-tuning process
 - Monitor training progress
-- Test completed models
+- Check job status
 
-## 📊 Data Format
+### 4. Model Testing Tab
+- List available models
+- Test models interactively
+- Evaluate responses
 
-Training examples follow OpenAI's chat format:
+## 🌐 Web Scraping Features
+
+The web scraper can:
+- Extract content from any website
+- Handle multiple pages
+- Clean and format text
+- Save content to files
+- Respect website policies with delays
+
+### Supported Content Types
+- HTML pages
+- Articles and blog posts
+- Islamic educational content
+- Q&A websites
+- Documentation sites
+
+## 📁 File Formats
+
+### JSON Training Data Format
 ```json
-{
-  "messages": [
-    {"role": "system", "content": "Islamic scholar assistant..."},
-    {"role": "user", "content": "What are the five pillars of Islam?"},
-    {"role": "assistant", "content": "The five pillars are... **Reference:** Sahih al-Bukhari 8"}
-  ]
-}
+[
+  {
+    "question": "What are the five pillars of Islam?",
+    "answer": "The five pillars are...",
+    "source": "Sahih al-Bukhari",
+    "reference": "8",
+    "category": "Pillars of Islam"
+  }
+]
 ```
 
-## 🤝 Contributing
+### Text File Processing
+- Automatically saved to `scraped_content/` directory
+- Manual processing required for Q&A extraction
+- Can be used as reference material
 
-1. Ensure all Islamic content is authentic and properly referenced
-2. Follow the existing code structure and documentation
-3. Test thoroughly before submitting changes
+## 🔧 Configuration
 
-## 📜 License
+### Environment Variables
+- `OPENAI_API_KEY`: Required for training features
+- `GRADIO_SERVER_PORT`: Custom port (default: 7860)
 
-This project is intended for educational and religious purposes. Please use responsibly and ensure all Islamic content is accurate and properly attributed. Help me with the data with valid references, or ask me to update. Thanks
+### Directory Structure
+```
+project/
+├── data/                 # Training data files
+├── scraped_content/      # Web scraped content
+├── logs/                 # Training logs
+├── models/               # Model information
+└── gradio_app.py         # Main interface
+```
+
+## 🛡️ Security & Ethics
+
+- **Respectful Scraping**: Includes delays between requests
+- **Content Validation**: Manual review recommended
+- **Islamic Authenticity**: Verify all religious content
+- **Privacy**: No data sent to external services (except OpenAI for training)
+
+## 🐛 Troubleshooting
+
+### Common Issues
+
+1. **Port Already in Use**
+   ```bash
+   # Change port in launch_gradio.py
+   interface.launch(server_port=7861)
+   ```
+
+2. **Missing Dependencies**
+   ```bash
+   pip33 install -r requirements.txt
+   ```
+
+3. **OpenAI API Issues**
+   - Verify API key is set correctly
+   - Check API quota and billing
+   - Ensure key has fine-tuning permissions
+
+4. **Web Scraping Blocked**
+   - Some sites block automated requests
+   - Try different URLs or manual content entry
+   - Respect robots.txt and terms of service
+
+## 📞 Support
+
+For issues or questions:
+1. Check the console output for error messages
+2. Verify all requirements are installed
+3. Ensure OpenAI API key is valid
+4. Review scraped content for quality
 
 ---
 
-*May this project serve the Ummah and help spread authentic Islamic knowledge.*
+*May this tool serve the Ummah in spreading authentic Islamic knowledge through AI.*
